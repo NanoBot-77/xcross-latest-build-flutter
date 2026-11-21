@@ -44,7 +44,7 @@ jobs:
         if: steps.meta.outputs.exists == 'false'
         uses: dart-lang/setup-dart@v1
         with:
-          sdk: "3.13.5"
+          sdk: "stable"
 
       - name: Clone xcross_gen_snapshot builder
         if: steps.meta.outputs.exists == 'false'
@@ -79,10 +79,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.meta.outputs.version }}"
+          cp builder/out-rel/gen_snapshot gen_snapshot_release
+          cp builder/out-prof/gen_snapshot gen_snapshot_profile
+
           gh release create "$VERSION" \
-            builder/out-rel/gen_snapshot#gen_snapshot_release \
-            builder/out-prof/gen_snapshot#gen_snapshot_profile \
             --repo "${{ github.repository }}" \
             --target main \
             --title "Flutter $VERSION (linux-x64)" \
             --notes "Automated iOS arm64 gen_snapshot for Flutter $VERSION."
+
+          # Wait briefly for uploads.github.com to register the new release ID
+          sleep 5
+          for i in 1 2 3; do
+            if gh release upload "$VERSION" \
+              gen_snapshot_release \
+              gen_snapshot_profile \
+              --clobber \
+              --repo "${{ github.repository }}"; then
+              exit 0
+            fi
+            echo "Upload attempt $i failed, retrying in 5s..."
+            sleep 5
+          done
+          exit 1
